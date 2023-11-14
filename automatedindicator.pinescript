@@ -1,4 +1,171 @@
-indicator("Psycological Price Conversions", shorttitle="Psycological Price Conversions", overlay=true)
+//@version=5
+//@author = Max Heltzel
+indicator("BullBox Printers Futures", shorttitle="Bull Box Printers Futures", overlay=true)
+
+
+// Create an input to toggle the table display
+var bool showTable = input(true, title="Show Bull Box Badge? 🐂", group="Features") ? true : false
+
+
+showDonchian = input.bool(true, 'Show Donchian Band', group="Features")
+
+
+// Input for New York session times
+var ny_start = input.session("0930-1600", "New York", group="New York Session")
+
+// Input for three customizable time periods
+var float ny_period_1_start = input.float(17, "Period 1 Start Hour (187 for 6:00 PM)", minval=0, maxval=24, step=0.5, group="Time Periods")
+var float ny_period_1_duration = input.float(0.001, "Period 1 Duration (Minute)", minval=0.001, maxval=24, step=0.01, group="Time Periods")
+
+var float ny_period_2_start = input.float(8.5, "Period 2 Start Hour (8.5 for 9:30 AM)", minval=0, maxval=24, step=0.5, group="Time Periods")
+var float ny_period_2_duration = input.float(1, "Period 2 Duration (Hours)", minval=0.001, maxval=24, step=0.01, group="Time Periods")
+
+var float ny_period_3_start = input.float(9.5, "Period 2 Start Hour (9.5 for 10 AM)", minval=0, maxval=24, step=0.5, group="Time Periods")
+var float ny_period_3_duration = input.float(0.001, "Period 2 Duration (Hours)", minval=0.001, maxval=24, step=0.01, group="Time Periods")
+
+var float ny_period_4_start = input.float(12, "Period 3 Start Hour (12 for 1:00 PM)", minval=0, maxval=24, step=0.5, group="Time Periods")
+var float ny_period_4_duration = input.float(0.001, "Period 3 Duration (Hours)", minval=0.001, maxval=24, step=0.01, group="Time Periods")
+
+var float ny_period_5_start = input.float(15, "Period 4 Start Hour (14 for 3:00 PM)", minval=0, maxval=24, step=0.5, group="Time Periods")
+var float ny_period_5_duration = input.float(0.001, "Period 4 Duration (Hours)", minval=0.001, maxval=24, step=0.01, group="Time Periods")
+
+// Colors for boxes
+var color ny_color = input(color.new(#4caf4f, 100), "NY Session Color", group="Session Colors")
+var color period_1_color = input(color.new(#bebebe, 80), "Period 1 Color", group="Session Colors")
+var color period_2_color = input(color.new(#bebebe, 80), "Period 2 Color", group="Session Colors")
+var color period_3_color = input(color.new(#bebebe, 80), "Period 3 Color", group="Session Colors")
+var color period_4_color = input(color.new(#bebebe, 80), "Period 4 Color", group="Session Colors")
+
+// Function to convert input hours to bar times
+get_period_bar_time(start_hour, duration) =>
+    session_start = timestamp(year, month, dayofmonth, int(start_hour), int((start_hour % 1) * 60))
+    session_end = timestamp(year, month, dayofmonth, int(start_hour + duration), int(((start_hour + duration) % 1) * 60))
+    [session_start, session_end]
+
+// NY session
+ny_session_start = timestamp(year, month, dayofmonth, 08, 30)
+ny_session_end = timestamp(year, month, dayofmonth, 16, 00)
+ny_session = time >= ny_session_start and time <= ny_session_end
+bgcolor(ny_session ? ny_color : na, transp=90)
+
+// Period 1
+[period_1_start, period_1_end] = get_period_bar_time(ny_period_1_start, ny_period_1_duration)
+period_1 = time >= period_1_start and time <= period_1_end
+bgcolor(period_1 ? period_1_color : na, transp=80)
+
+// Period 2
+[period_2_start, period_2_end] = get_period_bar_time(ny_period_2_start, ny_period_2_duration)
+period_2 = time >= period_2_start and time <= period_2_end
+bgcolor(period_2 ? period_2_color : na, transp=80)
+
+// Period 3
+[period_3_start, period_3_end] = get_period_bar_time(ny_period_3_start, ny_period_3_duration)
+period_3 = time >= period_3_start and time <= period_3_end
+bgcolor(period_3 ? period_3_color : na, transp=80)
+
+// Period 4
+[period_4_start, period_4_end] = get_period_bar_time(ny_period_4_start, ny_period_4_duration)
+period_4 = time >= period_4_start and time <= period_4_end
+bgcolor(period_4 ? period_4_color : na, transp=80)
+
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//             Open Price, Yesterday's Close
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  
+
+
+
+UTCTimeInput = input('1800-1700', title="Get Open Value at Time?")
+OpenValueTime = time("23", UTCTimeInput)
+shouldDrawLine = (hour == 18 and minute >= 1) or (hour == 19 and minute < 1)
+
+var float OpenPA = na
+var line myLine = na
+if OpenValueTime
+    if not OpenValueTime[1]
+        OpenPA := open
+        myLine := line.new(x1 = bar_index, y1 = OpenPA, x2 = bar_index, y2 = OpenPA, width = 2, color = color.new(color.gray, 0))
+    if shouldDrawLine
+        line.set_xy2(id = myLine, x = bar_index, y = OpenPA)
+
+// Customize these inputs for Line 2
+UTCTimeInput2 = input('0800-1701', title="Get Open Value at Time for Line 2?")
+OpenValueTime2 = time("1", UTCTimeInput2)
+shouldDrawLine2 = (hour == 8 and minute >= 1) or (hour < 16)
+
+var float OpenPA2 = na
+var line myLine2 = na
+if OpenValueTime2
+    if not OpenValueTime2[1]
+        OpenPA2 := high // Example: using high price for line 2
+        myLine2 := line.new(x1 = bar_index, y1 = OpenPA2, x2 = bar_index, y2 = OpenPA2, width = 2, color = color.new(#004faa, 0))
+    if shouldDrawLine2
+        line.set_xy2(id = myLine2, x = bar_index, y = OpenPA2)
+
+
+
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//                 The Donch MA
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  
+
+//------------------------------------------------------------------------------
+// Settings
+//-----------------------------------------------------------------------------{
+typeMA1 = input.string("VWMA", 'Type MA Bands', options=["SMA", "EMA", "SMMA (RMA)", "HullMA", "WMA", "VWMA", "DEMA", "TEMA", "NONE"], group='Bands')
+len1 = input.int(50, 'Length Bands', group='Bands')
+
+
+colMidD = input.color(#0091b6, 'Color Mid Donchian', inline='2', group='Donchian')
+
+//------------------------------------------------------------------------------
+// Methods
+//-----------------------------------------------------------------------------{
+ma(type, length) =>
+    result = 0.0
+    ema1 = ta.ema(close, length)
+    ema2 = ta.ema(ema1, length)
+    ema3 = ta.ema(ema2, length)
+    if type == "SMA"
+        result := ta.sma(close, length)
+    if type == "EMA"
+        result := ema1
+    if type == "SMMA (RMA)"
+        result := ta.rma(close, length)
+    if type == "HullMA"
+        result := ta.hma(close, length)
+    if type == "WMA"
+        result := ta.wma(close, length)
+    if type == "VWMA"
+        result := ta.vwma(close, length)
+    if type == "DEMA"
+        result := 2 * ema1 - ema2
+    if type == "TEMA"
+        result := (3 * ema1) - (3 * ema2) + ema3
+    if type == "NONE"
+        result := na
+    result
+
+donchianMA(typeMA, len) =>
+    maVal = ma(typeMA, len)
+    H = ta.highest(maVal, len)
+    L = ta.lowest(maVal, len)
+    avgVal = math.avg(H, L)
+    [H, L, avgVal]
+
+//------------------------------------------------------------------------------
+// Calculations
+//-----------------------------------------------------------------------------{
+[upperBand, lowerBand, midDonchian] = donchianMA(typeMA1, len1)
+
+//------------------------------------------------------------------------------
+// Plotting
+//-----------------------------------------------------------------------------{
+plot(showDonchian ? midDonchian : na, 'Mid Donchian', color=colMidD, linewidth=6/4)
+
+
 
 //________________________________________________________
 //xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -446,3 +613,55 @@ if barstate.islast and show_table
 
         f_fillCell(3, 2, math.sign(ticker_chg) >= 0 ? "+" + str.tostring(ticker_chg_pct,'#.##') + "%" : str.tostring(ticker_chg_pct,'#.##') + "%")
         table.cell_set_text_color(displayTable, 2, 3, math.sign(ticker_chg) >= 0 ? color.green : color.red )
+
+
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//                 Anchored Box
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  
+// Initialize table in the top right corner
+var table myTable = table.new(position.top_right, 8, 6, bgcolor=color.rgb(0, 211, 222), frame_color=color.rgb(0, 211, 222), frame_width=2, border_width=2)
+
+if showTable
+    MyText1 = 'Bull Box Analyst 🐂'
+    table.cell(myTable, 0, 0, text=MyText1, bgcolor=color.rgb(16, 51, 81), text_color=color.white, text_size=size.normal)
+
+    // add rows and columns here...
+
+    // Uncomment and modify the following if you want to add dynamic text based on some condition
+    // if barstate.islast
+    //    MyDynamicText = 'Dynamic Text Based on Condition'
+    //    table.cell(myTable, 0, 1, text=MyDynamicText, bgcolor=color.blue, text_color=color.white, text_size=size.normal)
+
+    // dynamic cells add here...
+
+// Uncomment if plotting is required
+// plot(anySeries, title='Title Here', linewidth=2, color=color.red)
+
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//                 Moving Averages
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  
+
+
+// Input for moving averages lengths
+lengthEMA1 = input.int(9, minval=1, title="EMA Length 1", group="Moving Averages")
+lengthEMA2 = input.int(21, minval=1, title="EMA Length 2")
+lengthEMA3 = input.int(50, minval=1, title="EMA Length 3")
+
+// Input for moving averages colors
+colorEMA1 = input.color(color.rgb(100, 100, 100), title="EMA 1 Color")
+colorEMA2 = input.color(color.rgb(39, 0, 146), title="EMA 2 Color")
+colorEMA3 = input.color(color.rgb(0, 24, 131), title="EMA 3 Color")
+
+// Calculating moving averages
+emaLine1 = ta.ema(close, lengthEMA1)
+emaLine2 = ta.ema(close, lengthEMA2)
+emaLine3 = ta.ema(close, lengthEMA3)
+
+// Plotting moving averages
+plot(emaLine1, title="EMA 1", color=colorEMA1, linewidth=2)
+plot(emaLine2, title="EMA 2", color=colorEMA2, linewidth=2)
+plot(emaLine3, title="EMA 3", color=colorEMA3, linewidth=2)
