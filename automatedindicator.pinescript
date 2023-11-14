@@ -624,7 +624,7 @@ if barstate.islast and show_table
 var table myTable = table.new(position.top_right, 8, 6, bgcolor=color.rgb(0, 211, 222), frame_color=color.rgb(0, 211, 222), frame_width=2, border_width=2)
 
 if showTable
-    MyText1 = 'Bull Box Analyst 🐂'
+    MyText1 = 'Bull Box 🐂'
     table.cell(myTable, 0, 0, text=MyText1, bgcolor=color.rgb(16, 51, 81), text_color=color.white, text_size=size.normal)
 
     // add rows and columns here...
