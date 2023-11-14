@@ -1,0 +1,448 @@
+indicator("Psycological Price Conversions", shorttitle="Psycological Price Conversions", overlay=true)
+
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//              QQQ Level Translations
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © PtGambler
+
+group_table = 'Price Table'
+
+// inputs
+qqq         = input.bool(true, 'QQQ', inline = 'qqq', group = "QQQ & NQ Translation")
+multi1q      = input.float(1, '| Multiplier',minval = 0.1, step = 0.5, inline = 'qqq', group = "QQQ & NQ Translation")
+col1q        = input.color(color.rgb(53, 53, 53), '', inline = 'qqq', group = "QQQ & NQ Translation")
+qqqbaseq     = input.int(1, 'Base', minval = 1, inline = 'qqq' )
+offset1q     = input.int(50, '    └ Offset', step = 10, inline = 'qqq2')
+line_style1q = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'qqq2')
+
+ndx         = input.bool(false, 'NDX', inline = 'ndx')
+multi2q      = input.float(100, '| Multiplier', minval = 0.1, step = 5, inline = 'ndx')
+col2q        = input.color(color.yellow, '', inline = 'ndx')
+offset2q     = input.int(100, '    └ Offset', step = 10, inline = 'ndx2')
+line_style2q = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'ndx2')
+
+nq          = input.bool(false, 'NQ', inline = 'nq')
+multi3q      = input.float(100, '| Multiplier', minval = 0.25, step = 5, inline = 'nq')
+col3q        = input.color(color.rgb(131, 131, 131), '', inline = 'nq')
+offset3q     = input.int(150, '    └ Offset', step = 10, inline = 'nq2')
+line_style3q = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'nq2')
+
+nasusd  = input.bool(false, '', inline = 'nasusd')
+ticker_inputq = input.symbol('NAS100USD', '', inline = 'nasusd')
+multi4q  = input.float(100, '| Multiplier', minval = 0.1, step = 5, inline = 'nasusd')
+col4q    = input.color(color.aqua, '', inline = 'nasusd')
+offset4q = input.int(200, '    └ Offset', step = 10, inline = 'nasusd2')
+line_style4q = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'nasusd2')
+
+levelsq      = input.int(10, '# of levels +/-') * 2 + 1
+
+in_text_sizeq = input.string('Normal', 'Text size', options = ['Auto', 'Large', 'Normal', 'Small', 'Tiny'])
+
+text_sizeq = switch in_text_sizeq
+    'Auto'      => size.auto
+    'Large'     => size.large
+    'Normal'    => size.normal
+    'Small'     => size.small
+    'Tiny'      => size.tiny
+
+show_lastq = input.bool(true, 'Show last closing price')
+
+show_tableq      = input.bool(true,"Show Prices", group= group_table, inline="Table")
+tableLocationq   = input.string(defval='Top right', options=['Top left', 'Top center', 'Top right', 'Bottom left', 'Bottom center', 'Bottom right'], title='| Location', group= group_table, inline="Table")
+tablePositionq   = tableLocationq == 'Top left' ? position.top_left : tableLocationq == 'Top center' ? position.top_center : tableLocationq == 'Top right' ? position.top_right : tableLocationq == 'Bottom left' ? position.bottom_left : tableLocationq == 'Bottom center' ? position.bottom_center : position.bottom_right
+table_font_sizeq       = input.string('Normal', "    └ Font Size", options = ['Auto', 'Tiny', 'Small', 'Normal', 'Large'], group= group_table, inline = 'font')
+show_chgq        = input.bool(true, 'Show Price Change', group = group_table)
+
+// linestyles
+f_lineStyleq(_styleStr) =>
+    _out = switch _styleStr
+        'Solid' => line.style_solid
+        'Dashed' => line.style_dashed
+        'Dotted' => line.style_dotted
+
+line_style1q := f_lineStyleq(line_style1q)
+line_style2q := f_lineStyleq(line_style2q)
+line_style3q := f_lineStyleq(line_style3q)
+line_style4q := f_lineStyleq(line_style4q)
+
+// Variables and data 
+t1q = time(timeframe.period, "0930-1600:23456", "America/New_York")
+
+tickerq = syminfo.ticker
+
+QQQ_price   = request.security('QQQ', timeframe.period, math.round_to_mintick(close))
+NDX_price   = request.security('NDX', timeframe.period, math.round_to_mintick(close))
+[NQ_price, NQ_last_close]    = request.security('NQ1!', timeframe.period, [math.round_to_mintick(close), ta.valuewhen(t1q[1] and not t1q,open,0)])
+ticker_priceq = request.security(ticker_inputq, timeframe.period, math.round_to_mintick(close))
+ticker_last_closeq = request.security(ticker_inputq, '1D', math.round_to_mintick(close[1]))
+
+var qqq_levels   = array.new_line()
+var ndx_levels   = array.new_line()
+var nq_levels    = array.new_line()
+var nasusd_levels = array.new_line()
+var qqq_lbls        = array.new_label()
+var ndx_lbls        = array.new_label()
+var nq_lbls         = array.new_label()
+var nasusd_lbls     = array.new_label()
+
+// closest base price
+QQQp0   = math.floor(QQQ_price/qqqbaseq)*qqqbaseq
+NDXp0   = math.floor(NDX_price/100)*100
+NQp0    = math.floor(NQ_price/100)*100
+round_num = math.pow(10, str.length(str.tostring(math.floor(ticker_priceq)))-2)
+NDXUSDp0 = math.floor(ticker_priceq / round_num ) * round_num
+
+// closing price during regular hours
+close_priceq = close
+regular_closeq = ta.valuewhen(t1q, close, 0)
+
+// Price change / change %
+NQ_chgq = NQ_price - NQ_last_close
+NQ_chg_pctq = NQ_chgq / NQ_last_close * 100
+
+ticker_chgq = ticker_priceq - ticker_last_closeq
+ticker_chg_pctq = ticker_chgq / ticker_last_closeq * 100
+
+// Functions
+f_setLevelsq(_alt, _lineArray, _lblArray, _basePrice, _altPrice, _multiplier, _offset, _color, _linestyle) =>
+    _price = close_priceq
+    if _alt == 'QQQ' or _alt == 'NDX'
+        _price := regular_closeq
+    base =  _basePrice * (_price / _altPrice)
+    array.push(_lineArray, line.new(bar_index, base, bar_index + 1, base, xloc.bar_index, extend.both, _color, _linestyle, 1))
+    array.push(_lblArray, label.new(bar_index+_offset, base, _alt + ' ' + str.tostring(_basePrice), xloc = xloc.bar_index, color = color.new(chart.bg_color,50), style = label.style_label_left, textcolor = _color, size = text_sizeq, textalign = text.align_left))
+
+    for x = 1 to (levelsq-1)/2
+        price = (_basePrice + x*_multiplier) * (_price / _altPrice)
+        alt_price = (_basePrice + x*_multiplier)
+        array.push(_lineArray, line.new(bar_index, price, bar_index + 1, price, xloc.bar_index, extend.both, _color, _linestyle, 1))
+        array.push(_lblArray, label.new(bar_index+_offset, price, _alt + ' ' + str.tostring(alt_price), xloc = xloc.bar_index, color = color.new(chart.bg_color,50), style = label.style_label_left, textcolor = _color, size = text_sizeq, textalign = text.align_left))
+    for x = (levelsq-1)/2 + 1 to levelsq - 1
+        y = (levelsq-1)/2 - x
+        price = (_basePrice + y*_multiplier) * (_price / _altPrice)
+        alt_price = (_basePrice + y*_multiplier)
+        array.push(_lineArray, line.new(bar_index, price, bar_index + 1, price, xloc.bar_index, extend.both, _color, _linestyle, 1))
+        array.push(_lblArray, label.new(bar_index+_offset, price, _alt + ' ' + str.tostring(alt_price), xloc = xloc.bar_index, color = color.new(chart.bg_color,50), style = label.style_label_left, textcolor = _color, size = text_sizeq, textalign = text.align_left))
+
+
+f_drawLabelXq(_x, _y, _text, _xloc, _yloc, _color, _style, _textcolor, _size, _textalign, _tooltip) =>
+    var id = label.new(_x, _y, _text, _xloc, _yloc, _color, _style, _textcolor, _size, _textalign, _tooltip)
+    label.set_xy(id, _x, _y)
+    label.set_text(id, _text)
+    label.set_tooltip(id, _tooltip)
+    label.set_textcolor(id, _textcolor)
+    id
+
+f_clearLinesq(_array) =>
+    if array.size(_array) > 0
+        for i = 0 to array.size(_array) - 1
+            line.delete(array.shift(_array))
+
+f_clearLabelsq(_array) =>
+    if array.size(_array) > 0
+        for i = 0 to array.size(_array) - 1
+            label.delete(array.shift(_array))
+
+// Last price display texts
+text_qqq = qqq or tickerq == 'QQQ' ? 'QQQ ' + str.tostring(QQQ_price) + '\n' : ''
+text_ndx = ndx or tickerq == 'NDX' ? 'NDX ' + str.tostring(NDX_price) + '\n' : ''
+text_nq = nq or tickerq == 'NQ1!' ? 'NQ1! ' + str.tostring(NQ_price) + '\n' : ''
+text_nasusd = nasusd or tickerq == ticker_inputq ? array.get(str.split(ticker_inputq, ':'), 1) + ' ' + str.tostring(ticker_priceq) + '\n' : ''
+
+price_text = ''
+
+if tickerq == 'QQQ'
+    price_text := text_qqq + text_ndx + text_nq + text_nasusd
+else if tickerq == 'NDX'
+    price_text := text_ndx + text_qqq + text_nq + text_nasusd
+else if tickerq == 'NQ1!' or tickerq == 'MNQ1!'
+    price_text := text_nq + text_qqq + text_ndx +  text_nasusd
+else if tickerq == ticker_inputq
+    price_text := text_nasusd + text_qqq + text_qqq + text_nq
+
+// Main
+if barstate.islast
+
+    if qqq
+        f_clearLinesq(qqq_levels)
+        f_clearLabelsq(qqq_lbls)
+    if ndx
+        f_clearLinesq(ndx_levels)
+        f_clearLabelsq(ndx_lbls)
+    if nq
+        f_clearLinesq(nq_levels)
+        f_clearLabelsq(nq_lbls)
+    if nasusd
+        f_clearLinesq(nasusd_levels)
+        f_clearLabelsq(nasusd_lbls)
+
+    if show_lastq
+        f_drawLabelXq(bar_index, close, price_text, xloc.bar_index, yloc.price, color.new(chart.bg_color,70), label.style_label_left, chart.fg_color, size.normal, text.align_left, '' )
+    
+    if qqq
+        f_setLevelsq('QQQ', qqq_levels, qqq_lbls, QQQp0, QQQ_price, multi1q, offset1q, col1q, line_style1q)
+    if ndx
+        f_setLevelsq('NDX', ndx_levels, ndx_lbls, NDXp0, NDX_price, multi2q, offset2q, col2q, line_style2q)
+    if nq
+        f_setLevelsq('NQ1!', nq_levels, nq_lbls, NQp0, NQ_price, multi3q, offset3q, col3q ,line_style3q)
+    if nasusd
+        f_setLevelsq(array.get(str.split(ticker_inputq, ':'), 1), nasusd_levels, nasusd_lbls, NDXUSDp0, ticker_priceq, multi4q, offset4q, col4q, line_style4q)
+
+// Table --------------------------------------------------------------------------------------------------------------
+
+var displayTable = table.new(tablePositionq, 4, 4, border_width=1)
+
+f_fillCellq(_row, _column,series string _cellText) =>
+    switch table_font_sizeq
+        "Auto" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.auto)
+        "Tiny" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.tiny)
+        "Small" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.small)
+        "Normal" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.normal)
+        "Large" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.large)
+
+if barstate.islast and show_tableq
+    f_fillCellq(0, 0, 'QQQ')
+    f_fillCellq(1, 0, 'NDX')
+    f_fillCellq(2, 0, 'NQ1!')
+    f_fillCellq(3, 0, 'NAS100USD')
+
+    f_fillCellq(0, 1, str.tostring(QQQ_price))
+    f_fillCellq(1, 1, str.tostring(NDX_price))
+    f_fillCellq(2, 1, str.tostring(NQ_price))
+    f_fillCellq(3, 1, str.tostring(ticker_priceq))
+
+    if show_chgq
+        f_fillCellq(0, 2, math.sign(NQ_chgq) >= 0 ? "+" + str.tostring(NQ_chg_pctq,'#.##') + "%" : str.tostring(NQ_chg_pctq,'#.##') + "%")
+        table.cell_set_text_color(displayTable, 2, 0, math.sign(NQ_chgq) >= 0 ? color.green : color.red )
+        table.merge_cells(displayTable,2, 0, 2, 2)
+
+        f_fillCellq(3, 2, math.sign(ticker_chgq) >= 0 ? "+" + str.tostring(ticker_chg_pctq,'#.##') + "%" : str.tostring(ticker_chg_pctq,'#.##') + "%")
+        table.cell_set_text_color(displayTable, 2, 3, math.sign(ticker_chgq) >= 0 ? color.green : color.red )
+
+
+
+
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+//              SPY Level Translations
+//________________________________________________________
+//xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+group_tablee = 'Price Table'
+
+// inputs
+spy     = input.bool(true, 'SPY', inline = 'spy')
+multi1  = input.float(1, '| Multiplier',minval = 0.1, step = 0.5, inline = 'spy')
+col1    = input.color(color.rgb(83, 83, 83), '', inline = 'spy')
+spybase = input.int(1, 'Base', minval = 1, inline = 'spy' )
+offset1 = input.int(50, '    └ Offset', step = 10, inline = 'spy2')
+line_style1 = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'spy2')
+
+spx     = input.bool(false, 'SPX', inline = 'spx')
+multi2  = input.float(10, '| Multiplier', minval = 0.1, step = 5, inline = 'spx')
+col2    = input.color(color.yellow, '', inline = 'spx')
+offset2 = input.int(100, '    └ Offset', step = 10, inline = 'spx2')
+line_style2 = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'spx2')
+
+es      = input.bool(false, 'ES', inline = 'es')
+multi3  = input.float(10, '| Multiplier', minval = 0.25, step = 5, inline = 'es')
+col3    = input.color(color.rgb(88, 88, 88), '', inline = 'es')
+offset3 = input.int(150, '    └ Offset', step = 10, inline = 'es2')
+line_style3 = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'es2')
+
+spxusd  = input.bool(false, '', inline = 'spxusd')
+ticker_input = input.symbol('SPX500USD', '', inline = 'spxusd')
+multi4  = input.float(10, '| Multiplier', minval = 0.1, step = 5, inline = 'spxusd')
+col4    = input.color(color.aqua, '', inline = 'spxusd')
+offset4 = input.int(200, '    └ Offset', step = 10, inline = 'spxusd2')
+line_style4 = input.string('Dashed', '| Line style', options = ['Solid', 'Dashed', 'Dotted'], inline = 'spxusd2')
+
+levels  = input.int(10, '# of levels +/-') * 2 + 1
+
+in_text_size = input.string('Normal', 'Text size', options = ['Auto', 'Large', 'Normal', 'Small', 'Tiny'])
+
+text_size = switch in_text_size
+    'Auto'      => size.auto
+    'Large'     => size.large
+    'Normal'    => size.normal
+    'Small'     => size.small
+    'Tiny'      => size.tiny
+
+show_last = input.bool(true, 'Show last closing price', inline = 'showlast')
+
+show_table      = input.bool(true,"Show Prices", group= group_table, inline="Table")
+tableLocation   = input.string(defval='Top right', options=['Top left', 'Top center', 'Top right', 'Bottom left', 'Bottom center', 'Bottom right'], title='| Location', group= group_table, inline="Table")
+tablePosition   = tableLocation == 'Top left' ? position.top_left : tableLocation == 'Top center' ? position.top_center : tableLocation == 'Top right' ? position.top_right : tableLocation == 'Bottom left' ? position.bottom_left : tableLocation == 'Bottom center' ? position.bottom_center : position.bottom_right
+table_font_size       = input.string('Normal', "    └ Font Size", options = ['Auto', 'Tiny', 'Small', 'Normal', 'Large'], group= group_table, inline = 'font')
+show_chg        = input.bool(true, 'Show Price Change', group = group_table)
+
+// linestyles
+f_lineStyle(_styleStr) =>
+    _out = switch _styleStr
+        'Solid' => line.style_solid
+        'Dashed' => line.style_dashed
+        'Dotted' => line.style_dotted
+
+line_style1 := f_lineStyle(line_style1)
+line_style2 := f_lineStyle(line_style2)
+line_style3 := f_lineStyle(line_style3)
+line_style4 := f_lineStyle(line_style4)
+
+// Variables and data 
+t1 = time(timeframe.period, "0930-1600:23456", "America/New_York")
+
+ticker = syminfo.ticker
+
+day = dayofweek
+
+SPY_price  = request.security('SPY', timeframe.period, math.round_to_mintick(close))
+SPX_price = request.security('SPX', timeframe.period, math.round_to_mintick(close))
+[ES_price, ES_last_close]    = request.security('ES1!', timeframe.period, [math.round_to_mintick(close), ta.valuewhen(t1[1] and not t1,open,0)])
+ticker_price = request.security(ticker_input, timeframe.period, math.round_to_mintick(close))
+ticker_last_close = request.security(ticker_input, '1D', math.round_to_mintick(close[1]))
+
+var spy_levels   = array.new_line()
+var spx_levels   = array.new_line()
+var es_levels    = array.new_line()
+var spxusd_levels = array.new_line()
+var spy_lbls        = array.new_label()
+var spx_lbls        = array.new_label()
+var es_lbls         = array.new_label()
+var spxusd_lbls     = array.new_label()
+
+// closest base price
+SPYp0   = math.floor(SPY_price/spybase)*spybase
+SPXp0   = math.floor(SPX_price/10)*10
+ESp0    = math.floor(ES_price/10)*10
+SPXUSDp0 = math.floor(ticker_price)
+
+// closing price during regular hours
+close_price = close
+regular_close = ta.valuewhen(t1, close, 0)
+
+// Price change / change %
+ES_chg = ES_price - ES_last_close
+ES_chg_pct = ES_chg / ES_last_close * 100
+
+ticker_chg = ticker_price - ticker_last_close
+ticker_chg_pct = ticker_chg / ticker_last_close * 100
+
+// Functions
+f_setLevels(_alt, _lineArray, _lblArray, _basePrice, _altPrice, _multiplier, _offset, _color, _linestyle) =>
+    _price = close_price
+    if _alt == 'SPY' or _alt == 'SPX'
+        _price := regular_close
+    base =  _basePrice * (_price / _altPrice)
+    array.push(_lineArray, line.new(bar_index, base, bar_index + 1, base, xloc.bar_index, extend.both, _color, _linestyle, 1))
+    array.push(_lblArray, label.new(bar_index+_offset, base, _alt + ' ' + str.tostring(_basePrice), xloc = xloc.bar_index, color = color.new(chart.bg_color,50), style = label.style_label_left, textcolor = _color, size = text_size, textalign = text.align_left))
+
+    for x = 1 to (levels-1)/2
+        price = (_basePrice + x*_multiplier) * (_price / _altPrice)
+        alt_price = (_basePrice + x*_multiplier)
+        array.push(_lineArray, line.new(bar_index, price, bar_index + 1, price, xloc.bar_index, extend.both, _color, _linestyle, 1))
+        array.push(_lblArray, label.new(bar_index+_offset, price, _alt + ' ' + str.tostring(alt_price), xloc = xloc.bar_index, color = color.new(chart.bg_color,50), style = label.style_label_left, textcolor = _color, size = text_size, textalign = text.align_left))
+    for x = (levels-1)/2 + 1 to levels - 1
+        y = (levels-1)/2 - x
+        price = (_basePrice + y*_multiplier) * (_price / _altPrice)
+        alt_price = (_basePrice + y*_multiplier)
+        array.push(_lineArray, line.new(bar_index, price, bar_index + 1, price, xloc.bar_index, extend.both, _color, _linestyle, 1))
+        array.push(_lblArray, label.new(bar_index+_offset, price, _alt + ' ' + str.tostring(alt_price), xloc = xloc.bar_index, color = color.new(chart.bg_color,50), style = label.style_label_left, textcolor = _color, size = text_size, textalign = text.align_left))
+
+
+f_drawLabelX(_x, _y, _text, _xloc, _yloc, _color, _style, _textcolor, _size, _textalign, _tooltip) =>
+    var id = label.new(_x, _y, _text, _xloc, _yloc, _color, _style, _textcolor, _size, _textalign, _tooltip)
+    label.set_xy(id, _x, _y)
+    label.set_text(id, _text)
+    label.set_tooltip(id, _tooltip)
+    label.set_textcolor(id, _textcolor)
+    id
+
+f_clearLines(_array) =>
+    if array.size(_array) > 0
+        for i = 0 to array.size(_array) - 1
+            line.delete(array.shift(_array))
+
+f_clearLabels(_array) =>
+    if array.size(_array) > 0
+        for i = 0 to array.size(_array) - 1
+            label.delete(array.shift(_array))
+
+// Last price display texts
+text_spy = spy or ticker == 'SPY' ? 'SPY ' + str.tostring(SPY_price) + '\n' : ''
+text_spx = spx or ticker == 'SPX' ? 'SPX ' + str.tostring(SPX_price) + '\n' : ''
+text_es = es or ticker == 'ES1!' ? 'ES1! ' + str.tostring(ES_price) + '\n' : ''
+text_spxusd = spxusd or ticker == ticker_input ? array.get(str.split(ticker_input, ':'), 1) + ' ' + str.tostring(ticker_price) + '\n' : ''
+
+price_texte = ''
+
+if ticker == 'SPY'
+    price_text := text_spy + text_spx + text_es + text_spxusd
+else if ticker == 'SPX'
+    price_text := text_spx + text_spy + text_es + text_spxusd
+else if ticker == 'ES1!' or ticker == 'MES1!'
+    price_text := text_es + text_spy + text_spx +  text_spxusd
+else if ticker == ticker_input
+    price_text := text_spxusd + text_spy + text_spy + text_es
+
+// Main
+if barstate.islast
+
+    if spy
+        f_clearLines(spy_levels)
+        f_clearLabels(spy_lbls)
+    if spx
+        f_clearLines(spx_levels)
+        f_clearLabels(spx_lbls)
+    if es
+        f_clearLines(es_levels)
+        f_clearLabels(es_lbls)
+    if spxusd
+        f_clearLines(spxusd_levels)
+        f_clearLabels(spxusd_lbls)
+
+    if show_last
+        f_drawLabelX(bar_index, close, price_text, xloc.bar_index, yloc.price, color.new(chart.bg_color,70), label.style_label_left, chart.fg_color, size.normal, text.align_left, '' )
+    
+    if spy
+        f_setLevels('SPY', spy_levels, spy_lbls, SPYp0, SPY_price, multi1, offset1, col1, line_style1)
+    if spx
+        f_setLevels('SPX', spx_levels, spx_lbls, SPXp0, SPX_price, multi2, offset2, col2, line_style2)
+    if es
+        f_setLevels('ES1!', es_levels, es_lbls, ESp0, ES_price, multi3, offset3, col3 ,line_style3)
+    if spxusd
+        f_setLevels(array.get(str.split(ticker_input, ':'), 1), spxusd_levels, spxusd_lbls, SPXUSDp0, ticker_price, multi4, offset4, col4, line_style4)
+
+// Table --------------------------------------------------------------------------------------------------------------
+
+var displayTablee = table.new(tablePosition, 4, 4, border_width=1)
+
+f_fillCell(_row, _column,series string _cellText) =>
+    switch table_font_size
+        "Auto" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.auto)
+        "Tiny" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.tiny)
+        "Small" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.small)
+        "Normal" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.normal)
+        "Large" => table.cell(displayTable, _column, _row, _cellText, bgcolor=color.new(chart.bg_color,50), text_color=color.white, text_halign = text.align_left, text_valign = text.align_center, text_size = size.large)
+
+if barstate.islast and show_table
+    f_fillCell(0, 0, 'SPY')
+    f_fillCell(1, 0, 'SPX')
+    f_fillCell(2, 0, 'ES1!')
+    f_fillCell(3, 0, array.get(str.split(ticker_input, ':'), 1))
+
+    f_fillCell(0, 1, str.tostring(SPY_price))
+    f_fillCell(1, 1, str.tostring(SPX_price))
+    f_fillCell(2, 1, str.tostring(ES_price))
+    f_fillCell(3, 1, str.tostring(ticker_price))
+
+    if show_chg
+        f_fillCell(0, 2, math.sign(ES_chg) >= 0 ? "+" + str.tostring(ES_chg_pct,'#.##') + "%" : str.tostring(ES_chg_pct,'#.##') + "%")
+        table.cell_set_text_color(displayTable, 3, 0, math.sign(ES_chg) >= 0 ? color.green : color.red )
+        table.merge_cells(displayTable,3, 1, 3, 3)
+
+        f_fillCell(3, 2, math.sign(ticker_chg) >= 0 ? "+" + str.tostring(ticker_chg_pct,'#.##') + "%" : str.tostring(ticker_chg_pct,'#.##') + "%")
+        table.cell_set_text_color(displayTable, 2, 3, math.sign(ticker_chg) >= 0 ? color.green : color.red )
