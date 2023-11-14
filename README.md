@@ -1,3 +1,8 @@
+I would recommend using the automated trading view pinescript indicator. It is more accurate and effective. 
+There is no perfect constant multiple for indexes to stocks and vice versus.
+The indicator tracks psychological levels (i.e. 410, 14400, 380, 390, etc...).
+
+
 # Price Conversion
 
 ES to SPY
